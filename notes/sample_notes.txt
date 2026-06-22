@@ -1,0 +1,9 @@
+Agent 学习笔记
+
+messages 是模型看到的对话历史，Agent 循环会不断追加 assistant 和 tool 消息。
+tool definition 是工具说明书，模型只能通过它理解本地函数的名字、用途和参数。
+tool_call_id 用来配对一次工具请求和对应的工具结果。
+日志可以帮助我们观察每一步：用户输入、模型响应、工具调用、工具结果、最终答案。
+新增工具时，通常需要改三处：工具函数、TOOL_DEFINITIONS、TOOL_REGISTRY。
+如果问题需要精确计算，应该优先使用 calculate 工具。
+如果问题需要当前时间，应该优先使用 get_current_time 工具。
