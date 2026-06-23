@@ -1,4 +1,4 @@
-"""Local development launcher.
+r"""Local development launcher.
 
 运行方式：
     .\.venv\Scripts\python run_dev.py
