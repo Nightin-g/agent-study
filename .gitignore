@@ -8,3 +8,5 @@ __pycache__/
 logs/
 .idea/
 .vscode/
+notes/
+.env.example
