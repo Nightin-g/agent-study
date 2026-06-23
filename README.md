@@ -1,8 +1,8 @@
 # LLM Agent Demo
 
-这是一个用于学习 LLM Agent 应用开发的小项目。它用 Python + FastAPI 调用 DeepSeek 的 OpenAI 兼容接口，并演示一个最小 Agent 循环：模型先判断是否需要调用本地工具，工具返回结果后，模型再生成最终回答。
+这是一个用于学习 LLM Agent 应用开发的小项目。它用 Python + FastAPI 调用 DeepSeek 的 OpenAI 兼容接口，并用 LangGraph 演示一个最小 Agent 状态图：模型先判断是否需要调用本地工具，工具返回结果后，图再回到模型节点生成最终回答。
 
-项目刻意保持简单：不引入数据库、不引入复杂前端框架、不引入大型 Agent 框架。这样你可以先看清楚 LLM API、messages、tools、tool_calls、tool registry、JSONL 日志这些核心概念。
+项目刻意保持简单：不引入数据库、不引入复杂前端框架，只把 Agent 编排交给 LangGraph。这样你可以看清楚 LLM API、messages、tools、tool_calls、tool registry、StateGraph、JSONL 日志这些核心概念。
 
 ## 技术选型
 
@@ -11,7 +11,8 @@
 | Python 3.11+ | 主语言 | AI/Agent/RAG 生态最成熟 |
 | FastAPI | 本地 Web API | 写法清晰，自动支持接口文档 |
 | Uvicorn | 启动 FastAPI 服务 | FastAPI 常用运行器 |
-| OpenAI Python SDK | 调用 DeepSeek | DeepSeek 支持 OpenAI 兼容格式 |
+| LangGraph | 编排 Agent 状态图 | 用 node 和 edge 表达 Agent 流程 |
+| LangChain OpenAI | 调用 DeepSeek | DeepSeek 支持 OpenAI 兼容格式 |
 | python-dotenv | 读取 `.env` | 把 API Key 放在配置里，不写死进代码 |
 | Pydantic | 校验请求和响应 | 让接口数据结构更清楚 |
 | 原生 HTML/CSS/JS | 简单网页 | 避免一开始被 React/Vue 分散注意力 |
@@ -31,7 +32,8 @@ llm-agent-demo/
 │  ├─ __init__.py
 │  ├─ main.py              # FastAPI 入口，接收浏览器请求
 │  ├─ config.py            # 读取环境变量
-│  ├─ llm_client.py        # 调用 DeepSeek，并实现最小 Agent 循环
+│  ├─ agent_graph.py       # LangGraph 状态图，编排模型节点和工具节点
+│  ├─ llm_client.py        # 保留 run_agent 入口，转调用 agent_graph
 │  ├─ schemas.py           # 请求和响应的数据结构
 │  ├─ logger.py            # JSONL 事件日志
 │  └─ tools.py             # Agent 可以调用的本地工具
@@ -54,13 +56,15 @@ static/app.js 调用 POST /api/chat
   ↓
 app/main.py 接收请求并校验参数
   ↓
-app/llm_client.py 把用户问题发给 DeepSeek
+app/llm_client.py 调用 LangGraph Agent
   ↓
-模型决定是否需要调用工具
+app/agent_graph.py 进入 prepare 节点，写入 intent_hint
   ↓
-app/tools.py 执行本地工具，例如计算或获取时间
+agent 节点调用 DeepSeek，模型决定是否需要调用工具
   ↓
-工具结果再次发给模型
+tools 节点执行 app/tools.py 里的本地工具
+  ↓
+图回到 agent 节点，把工具结果再次发给模型
   ↓
 模型生成最终回答
   ↓
@@ -69,7 +73,7 @@ app/tools.py 执行本地工具，例如计算或获取时间
 logs/agent-events.jsonl 记录完整事件
 ```
 
-这就是一个最小 Agent 的核心：模型不仅聊天，还能选择工具、读取工具结果、继续推理并回答。
+这就是一个最小 LangGraph Agent 的核心：Graph 负责流程，模型负责决策，工具负责执行。
 
 ## 快速开始
 
@@ -145,10 +149,11 @@ DeepSeek 官方 API 文档：https://api-docs.deepseek.com/
 1. 先看 `app/main.py`：理解 HTTP 请求怎么进入后端。
 2. 再看 `app/schemas.py`：理解请求体和响应体长什么样。
 3. 再看 `app/config.py`：理解 `.env` 如何变成 Python 配置。
-4. 重点看 `app/llm_client.py`：理解 Agent 循环和工具调用。
-5. 再看 `app/tools.py`：理解如何把本地函数暴露给模型。
-6. 再看 `app/logger.py`：理解 JSONL 日志如何记录 Agent 每一步。
-7. 最后看 `static/app.js`：理解网页如何调用后端。
+4. 重点看 `app/agent_graph.py`：理解 LangGraph 的 State、Node、Edge 和条件路由。
+5. 再看 `app/llm_client.py`：理解为什么保留兼容入口。
+6. 再看 `app/tools.py`：理解如何把本地函数暴露给模型。
+7. 再看 `app/logger.py`：理解 JSONL 日志如何记录 Agent 每一步。
+8. 最后看 `static/app.js`：理解网页如何调用后端。
 
 ## Agent 事件日志
 
@@ -157,8 +162,10 @@ DeepSeek 官方 API 文档：https://api-docs.deepseek.com/
 - `user_input`：用户输入和运行参数。
 - `model_request`：发给模型的消息摘要和工具列表。
 - `model_response`：模型返回的文本或工具调用。
+- `graph_prepare`：LangGraph 的准备节点给请求打的简单意图标签。
 - `tool_call_detected`：模型请求调用哪个工具、传了什么参数。
 - `tool_result`：本地工具执行结果。
+- `graph_max_steps`：状态图达到最大模型调用步数。
 - `final_answer`：最终返回给浏览器的答案。
 
 `logs/` 已经在 `.gitignore` 中，不会被提交到 Git。
