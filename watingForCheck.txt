@@ -1,0 +1,5 @@
+生成graph图后的compile方法的原理
+
+
+多个 tool_call 的循环 并发执行 结果顺序 异常隔离 
+每个 tool_call_id 对应哪个结果的控制原理
